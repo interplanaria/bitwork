@@ -316,7 +316,7 @@ class Bitwork {
       }
     })
   }
-  get(type, name, ...args) {
+  get(type, ...args) {
     if (type === 'mempool') {
       return this.mempool(...args)
     } else if (type === 'block') {
@@ -327,11 +327,13 @@ class Bitwork {
       return this.info(...args)
     } else if (type === 'rpc') {
       return new Promise((resolve, reject) => {
+        let name = args[0];
+        let a = args.slice(1);
         if (this.rpc[name]) {
-          this.rpc[name](...args, (err, res) => {
+          this.rpc[name].apply(this.rpc, [a, (err, res) => {
             if (err) reject(err)
             else resolve(res.result)
-          })
+          }])
         } else {
           reject("No such JSON-RPC method exists")
         }
