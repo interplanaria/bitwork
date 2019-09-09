@@ -1,0 +1,16 @@
+{
+  "name": "bitwork",
+  "version": "0.0.2",
+  "description": "Bitcoin networking made simple",
+  "main": "index.js",
+  "author": "unwriter@protonmail.com",
+  "license": "Open BSV",
+  "dependencies": {
+    "b2p2p": "0.0.1",
+    "bitcoind-rpc": "^0.8.1",
+    "bpu": "0.0.7",
+    "bsv": "^0.30.0",
+    "event-stream": "^4.0.1",
+    "txo": "0.0.16"
+  }
+}
