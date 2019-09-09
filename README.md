@@ -2,8 +2,6 @@
 
 > Bitcoin networking made simple.
 
-[View Full Documentation](https://bitwork.network)
-
 bitwork is the easiest, yet powerful way to process data from the bitcoin network.
 
 It makes interacting with bitcoin as easy as making an HTTP GET request, or listening to WebSockets!
