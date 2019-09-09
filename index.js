@@ -328,12 +328,12 @@ class Bitwork {
     } else if (type === 'rpc') {
       return new Promise((resolve, reject) => {
         let name = args[0];
-        let a = args.slice(1);
+        let a = args.length > 1 ? args.slice(1) : [];
         if (this.rpc[name]) {
-          this.rpc[name].apply(this.rpc, [a, (err, res) => {
+          this.rpc[name].apply(this.rpc, a.concat((err, res) => {
             if (err) reject(err)
             else resolve(res.result)
-          }])
+          }))
         } else {
           reject("No such JSON-RPC method exists")
         }
