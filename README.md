@@ -182,7 +182,7 @@ There are three API methods:
 
 1. **get:** fetch data from the blockchain.
 2. **on:** listen to data from the blockchain.
-3. **use:** attach middlewares.
+3. **use:** attach middleware.
 
 ## 1. get
 
@@ -288,10 +288,7 @@ Get a block header at a specific height:
 const bitwork = require('bitwork')
 const bit = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
 bit.on("ready", async () => {
-  let header = await bit.get(
-    "header", 
-    { at: 598848 }
-  ).catch((e) => { console.log("E = ", e) })
+  let header = await bit.get( "header", { at: 598848 })
   console.log("header = ", header)
 })
 ```
@@ -302,10 +299,7 @@ Get a block header at a specific hash:
 const bitwork = require('bitwork')
 const bit = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
 bit.on("ready", async () => {
-  let header = await bit.get(
-    "header", 
-    { at: "000000000000000000a3ec7e52e0f3fea4a4e6a2e3a3b1a9c473aeb36daa0076" }
-  ).catch((e) => { console.log("E = ", e) })
+  let header = await bit.get( "header", { at: "000000000000000000a3ec7e52e0f3fea4a4e6a2e3a3b1a9c473aeb36daa0076" })
   console.log("header = ", header)
 })
 ```
@@ -319,7 +313,7 @@ bit.on("ready", async () => {
   let headers = await bit.get(
     "header", 
     { from: 598848 }
-  ).catch((e) => { console.log("E = ", e) })
+  )
   console.log("headers = ", headers)
 })
 ```
@@ -330,10 +324,7 @@ Get block headers starting from a block hash, until the end (blockchain tip)
 const bitwork = require('bitwork')
 const bit = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
 bit.on("ready", async () => {
-  let headers = await bit.get(
-    "header", 
-    { from: "000000000000000000a3ec7e52e0f3fea4a4e6a2e3a3b1a9c473aeb36daa0076" }
-  ).catch((e) => { console.log("E = ", e) })
+  let headers = await bit.get( "header", { from: "000000000000000000a3ec7e52e0f3fea4a4e6a2e3a3b1a9c473aeb36daa0076" })
   console.log("headers = ", headers)
 })
 ```
@@ -344,10 +335,7 @@ Get block headers between two heights:
 const bitwork = require('bitwork')
 const bit = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
 bit.on("ready", async () => {
-  let headers = await bit.get(
-    "header", 
-    { from: 598848, to: 598850 }
-  ).catch((e) => { console.log("E = ", e) })
+  let headers = await bit.get( "header", { from: 598848, to: 598850 })
   console.log("headers = ", headers)
 })
 ```
@@ -359,10 +347,7 @@ Get block headers between a height and a hash:
 const bitwork = require('bitwork')
 const bit = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
 bit.on("ready", async () => {
-  let headers = await bit.get("header", {
-    from: "000000000000000000a3ec7e52e0f3fea4a4e6a2e3a3b1a9c473aeb36daa0076",
-    to: 598850
-  }).catch((e) => { console.log("E = ", e) })
+  let headers = await bit.get("header", { from: "000000000000000000a3ec7e52e0f3fea4a4e6a2e3a3b1a9c473aeb36daa0076", to: 598850 })
   console.log("headers = ", headers)
 })
 ```
