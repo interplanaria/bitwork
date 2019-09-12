@@ -1,6 +1,7 @@
 const {Peer, Messages, Inventory} = require('b2p2p')
 const bsv = require('bsv')
 const es = require('event-stream')
+const fs = require('fs')
 const engine = { bpu: require('bpu'), txo: require('txo') }
 const RpcClient = require('bitcoind-rpc')
 class Bitwork {
@@ -12,6 +13,11 @@ class Bitwork {
     if (!gene || !gene.rpc || !gene.rpc.user || !gene.rpc.pass) {
       console.log("Error: please pass 'rpc.user' and 'rpc.pass' attributes when initializing")
       process.exit(1)
+    }
+
+    if (gene.buffer) {
+      this.buffer = gene.buffer;
+      if (!fs.existsSync("buffer")) fs.mkdirSync("buffer")
     }
 
     // RPC
@@ -40,12 +46,17 @@ class Bitwork {
           header.height = await this.height(header.hash)
         }
         if (this.parse) {
-          let processed = await this.process(e.block.transactions, {
+          let options = {
             i: header.height,
             h: header.hash,
             t: header.time
-          })
-          this.onblock({ header: header, tx: processed })
+          }
+          if (gene.buffer) {
+            this.stream(e.block.transactions, "buffer/" + header.height + ".txt", header, options)
+          } else {
+            let processed = await this.process(e.block.transactions, options)
+            this.onblock({ header: header, tx: processed })
+          }
         } else {
           this.onblock({ header: header, tx: e.block.transactions })
         }
@@ -73,20 +84,38 @@ class Bitwork {
           this.response.mempool.push(message.transaction)
           if (this.onmempool && this.response.mempool.length >= this.mempoolCounter) {
             if (this.parse) {
-              let processed = await this.process(this.response.mempool)
-              this.onmempool({ tx: processed })
+              if (gene.buffer) {
+                this.stream(this.response.mempool, "buffer/mempool.txt")
+              } else {
+                let processed = await this.process(this.response.mempool)
+                this.onmempool({ tx: processed })
+                this.onmempool = null
+                this.request.type = null
+              }
             } else {
-              this.onmempool({ tx: this.response.mempool })
+              if (gene.buffer) {
+                this.stream(this.response.mempool, "buffer/mempool.txt")
+              } else {
+                this.onmempool({ tx: this.response.mempool })
+                this.onmempool = null
+                this.request.type = null
+              }
             }
-            this.onmempool = null
-            this.request.type = null
           }
         } else if (this.request.type === 'onmempool') {
           if (this.parse) {
-            let processed = await this.process([message.transaction])
-            if (processed.length > 0) this.onmempool(processed[0])
+            if (gene.buffer) {
+              this.stream([message.transaction], "buffer/onmempool.txt")
+            } else {
+              let processed = await this.process([message.transaction])
+              if (processed.length > 0) this.onmempool(processed[0])
+            }
           } else {
-            this.onmempool(message.transaction)
+            if (gene.buffer) {
+              this.stream([message.transaction], "buffer/onmempool.txt")
+            } else {
+              this.onmempool(message.transaction)
+            }
           }
         }
       }
@@ -122,6 +151,37 @@ class Bitwork {
       p.pipe(es.writeArray(function (err, array){
         resolve(array)
       }))
+    })
+  }
+  stream(txs, filename, header, options) {
+    let fileStream = fs.createWriteStream(filename);
+    es.readArray(txs)
+    .pipe(es.mapSync((data) => data.toString("hex")))
+    .pipe(es.join("\n"))
+    .pipe(fileStream)
+    .on("close", () => {
+      let readStream = fs.createReadStream(filename)
+      let stx = readStream.pipe(es.split())
+        .pipe(es.map((item, cb) => {
+          this.parse(item, options).then((data) => {
+            cb(null, data);
+          })
+        }))
+      if (header) {
+        this.onblock({ header: header, tx:stx })
+        fs.readdir("buffer", (err, items) => {
+          if (items.length >= this.buffer) {
+            let minHeight = Math.min.apply(null, items.map((item) => {
+              return parseInt(item.split(",")[0])
+            }))
+            fs.unlinkSync("buffer/" + minHeight + ".txt")
+          }
+        })
+      } else {
+        this.onmempool({ tx:stx })
+        this.onmempool = null
+        this.request.type = null
+      }
     })
   }
   async sendHeader(res) {
