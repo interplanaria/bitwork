@@ -1,5 +1,5 @@
 const bitwork = require('../index')
-const bit = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
+const bit = new bitwork({ buffer: 1, rpc: { user: "root", pass: "bitcoin" } })
 bit.use("parse", "bob")
 const weather = (b) => {
   bit.use("filter", (e) => {

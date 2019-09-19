@@ -1,14 +1,13 @@
 const bitwork = require('../index')
-const bit = new bitwork({ chain: 3, rpc: { user: "root", pass: "bitcoin" } })
+const bit = new bitwork({ buffer: 3, rpc: { user: "root", pass: "bitcoin" } })
 const fs = require('fs')
 const es = require('event-stream')
 bit.use("parse", "bob")
 bit.on("ready", async () => {
-  //let blk = await bit.get("block", 593965)
-  let blk = await bit.get("block", 598966)
+  let blk = await bit.get("block", 593965)
+  //let blk = await bit.get("block", 598966)
 
   console.log("start stream")
-  var output = fs.createWriteStream('output');
   let counter = 0;
   console.time("Ha")
   /*
@@ -23,14 +22,19 @@ bit.on("ready", async () => {
   })
   */
 
-  blk.tx().pipe(es.mapSync((data) => {
+  let items = [];
+  blk.tx.on("data", (data) => {
+    items.push(data)
     counter++;
-    if (counter%1000 === 0) console.log(counter)
-    return data;
-  }))
-  .pipe(es.stringify())
-  .pipe(process.stdout)
-  //.pipe(output)
+    if (items.length === 1000) {
+      console.log(counter)
+      fs.writeFile("" + counter, JSON.stringify(items), (err) => {
+        if (err) throw err;
+        console.log("saved")
+      })
+      items = [];
+    }
+  })
   .on("close", () => {
     console.timeEnd("Ha")
   })

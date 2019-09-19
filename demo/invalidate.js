@@ -6,20 +6,14 @@ const es = require('event-stream')
 const processor = (blk, height) => {
   return new Promise((resolve, reject) => {
     console.time("block " + height)
-    let t = blk.tx(100)
-//      .pipe(es.map((o) => {
-//        console.log(o)
-//        return o.tx
-//      }))
+    let t = blk.tx()
     t.pipe(es.stringify())//.pipe(process.stdout)
     t.on("close", () => {
       console.timeEnd("block " + height)
-//      bit.prune(3);
       resolve();
     })
     .on("end", () => {
       console.timeEnd("block " + height)
-//      bit.prune(3);
       resolve();
     })
   })
@@ -27,16 +21,18 @@ const processor = (blk, height) => {
 bit.use("parse", "bob")
 bit.on("ready", async () => {
   try {
-    //let headers = await bit.get("header", { from: 598777 })
     console.log("DONE")
     console.time("all")
     let headers = await bit.get("header", { from: 598000, to: 598200 })
-    //console.log("headers = ", headers)
     for(let i=0; i<headers.length; i++) {
       let blk = await bit.get("block", headers[i])
       await processor(blk, headers[i].height)
-//      console.log(JSON.stringify(blk, null, 2))
     }
+    await bit.invalidate({
+      from: 598005,
+      to: 598010
+    })
+
     console.timeEnd("all")
   } catch (e) {
     console.log("____", e)

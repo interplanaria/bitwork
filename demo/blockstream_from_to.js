@@ -1,5 +1,6 @@
 const bitwork = require('../index')
-const bit = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
+const bit = new bitwork({ buffer: 5, rpc: { user: "root", pass: "bitcoin" } })
+const es = require('event-stream')
 bit.use("parse", "bob")
 bit.use("filter", (e) => {
   return e.out[0] && e.out[0].tape[1] && e.out[0].tape[1].cell[0] && e.out[0].tape[1].cell[0].s === "1LtyME6b5AnMopQrBPLk4FGN8UBuhxKqrn" && e.out[0].tape[1].cell[1].b !== "BQ=="
@@ -18,7 +19,10 @@ bit.on("ready", async () => {
   for(let i=0; i<headers.length; i++) {
     console.time("block " + headers[i].height)
     let blk = await bit.get("block", headers[i])
-    console.timeEnd("block " + headers[i].height)
-    console.log(JSON.stringify(blk, null, 2))
+    blk.tx.pipe(es.stringify())
+      .pipe(process.stdout)
+      .on("end", () => {
+        console.timeEnd("block " + headers[i].height)
+      })
   }
 })

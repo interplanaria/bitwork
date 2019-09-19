@@ -2,6 +2,9 @@ const {Peer, Messages, Inventory} = require('b2p2p')
 const bsv = require('bsv')
 const es = require('event-stream')
 const fs = require('fs')
+const ts = require('tail-stream');
+const BatchStream = require('batch-stream');
+const Stream = require('stream')
 const engine = { bpu: require('bpu'), txo: require('txo') }
 const RpcClient = require('bitcoind-rpc')
 class Bitwork {
@@ -15,9 +18,10 @@ class Bitwork {
       process.exit(1)
     }
 
-    if (gene.buffer) {
-      this.buffer = gene.buffer;
-      if (!fs.existsSync("buffer")) fs.mkdirSync("buffer")
+    if (gene.chain) {
+      this.chain = gene.chain;
+      this.chainPath = (this.chain.path ? this.chain.path : process.cwd() + "/chain");
+      if (!fs.existsSync(this.chainPath)) fs.mkdirSync(this.chainPath, { recursive: true })
     }
 
     // RPC
@@ -51,8 +55,8 @@ class Bitwork {
             h: header.hash,
             t: header.time
           }
-          if (gene.buffer) {
-            this.stream(e.block.transactions, "buffer/" + header.height + ".txt", header, options)
+          if (gene.chain) {
+            this.stream(e.block.transactions, header.height, this.chainPath + "/" + header.height + ".tx", header, options)
           } else {
             let processed = await this.process(e.block.transactions, options)
             this.onblock({ header: header, tx: processed })
@@ -82,10 +86,11 @@ class Bitwork {
       if (this.request.mempool.has(message.transaction.hash)) {
         if (this.request.type === 'mempool') {
           this.response.mempool.push(message.transaction)
-          if (this.onmempool && this.response.mempool.length >= this.mempoolCounter) {
+          if (this.request.type && this.onmempool && this.response.mempool.length >= this.mempoolCounter) {
             if (this.parse) {
-              if (gene.buffer) {
-                this.stream(this.response.mempool, "buffer/mempool.txt")
+              if (gene.chain) {
+                this.stream(this.response.mempool, "mempool", this.chainPath + "/mempool.tx")
+                this.request.type = null
               } else {
                 let processed = await this.process(this.response.mempool)
                 this.onmempool({ tx: processed })
@@ -93,29 +98,17 @@ class Bitwork {
                 this.request.type = null
               }
             } else {
-              if (gene.buffer) {
-                this.stream(this.response.mempool, "buffer/mempool.txt")
-              } else {
-                this.onmempool({ tx: this.response.mempool })
-                this.onmempool = null
-                this.request.type = null
-              }
+              this.onmempool({ tx: this.response.mempool })
+              this.onmempool = null
+              this.request.type = null
             }
           }
         } else if (this.request.type === 'onmempool') {
           if (this.parse) {
-            if (gene.buffer) {
-              this.stream([message.transaction], "buffer/onmempool.txt")
-            } else {
-              let processed = await this.process([message.transaction])
-              if (processed.length > 0) this.onmempool(processed[0])
-            }
+            let processed = await this.process([message.transaction])
+            if (processed.length > 0) this.onmempool(processed[0])
           } else {
-            if (gene.buffer) {
-              this.stream([message.transaction], "buffer/onmempool.txt")
-            } else {
-              this.onmempool(message.transaction)
-            }
+            this.onmempool(message.transaction)
           }
         }
       }
@@ -153,36 +146,159 @@ class Bitwork {
       }))
     })
   }
-  stream(txs, filename, header, options) {
-    let fileStream = fs.createWriteStream(filename);
-    es.readArray(txs)
-    .pipe(es.mapSync((data) => data.toString("hex")))
-    .pipe(es.join("\n"))
-    .pipe(fileStream)
-    .on("close", () => {
-      let readStream = fs.createReadStream(filename)
-      let stx = readStream.pipe(es.split())
-        .pipe(es.map((item, cb) => {
-          this.parse(item, options).then((data) => {
-            cb(null, data);
+  invalidate(query) {
+    // Invalidate the bitwork chain
+    //
+    //  query := {
+    //    from: <from height>,
+    //    to: <to height>,
+    //    at: <at height>
+    //  }
+    // 
+    return new Promise((resolve, reject) => {
+      if (query) {
+        let files = [];
+        if (query.at) {
+          this.resolve(query.at).then(() => {
+            let fpath = this.chainPath + "/" + this.current_block.height
+            console.log("fpath = ", fpath)
+            if (fs.existsSync(fpath + ".tx")) fs.unlinkSync(fpath + ".tx")
+            if (fs.existsSync(fpath + ".json")) fs.unlinkSync(fpath + ".json")
+            resolve();
           })
-        }))
-      if (header) {
-        this.onblock({ header: header, tx:stx })
-        fs.readdir("buffer", (err, items) => {
-          if (items.length >= this.buffer) {
-            let minHeight = Math.min.apply(null, items.map((item) => {
-              return parseInt(item.split(",")[0])
-            }))
-            fs.unlinkSync("buffer/" + minHeight + ".txt")
+        } else {
+          if (query.from) {
+            this.resolve(query.from).then(() => {
+              let from_height = this.current_block.height;
+              if (query.to) {
+                this.resolve(query.to).then(() => {
+                  let to_height = this.current_block.height; 
+                  for(let i=from_height; i<=to_height; i++) {
+                    let fpath = this.chainPath + "/" + i
+                    if (fs.existsSync(fpath + ".tx")) fs.unlinkSync(fpath + ".tx")
+                    if (fs.existsSync(fpath + ".json")) fs.unlinkSync(fpath + ".json")
+                  }
+                  resolve();
+                })
+              } else {
+                fs.readdir(this.chainPath, (err, items) => {
+                  let blocks = items.filter((item) => {
+                    return /[0-9]+\.tx/.test(item)
+                  })
+                  let heights = blocks.map((b) => {
+                    return parseInt(b.split(",")[0])
+                  })
+                  let to_height = Math.max.apply(null, heights)
+                  for(let i=from_height; i<=to_height; i++) {
+                    let fpath = this.chainPath + "/" + i
+                    if (fs.existsSync(fpath + ".tx")) fs.unlinkSync(fpath + ".tx")
+                    if (fs.existsSync(fpath + ".json")) fs.unlinkSync(fpath + ".json")
+                  }
+                  resolve();
+                })
+              }
+            })
           }
-        })
+        }
       } else {
-        this.onmempool({ tx:stx })
-        this.onmempool = null
-        this.request.type = null
+        reject(`The query must look like this:
+
+  query := 
+    | { at: <at height> }
+    | { from: <from height> }
+    | { from: <from height>, to: <to height> }
+
+        `)
       }
     })
+  }
+  // For garbage collecting outdated block chainfiles
+  // which have just expired out of the chain size
+  prune(p) {
+    let counter = p ? p : this.chain.prune;
+    if (counter) {
+      fs.readdir(this.chainPath, (err, items) => {
+        let blocks = items.filter((item) => {
+          return /[0-9]+\.tx/.test(item)
+        })
+        if (blocks.length > counter) {
+          // find files to delete
+          blocks.sort((a, b) => {
+            let aa = parseInt(a.split(",")[0])
+            let bb = parseInt(b.split(",")[0])
+            return aa-bb;
+          })
+          blocks.slice(0, blocks.length-counter).forEach((item) => {
+            fs.unlinkSync(this.chainPath + "/" + item)
+            fs.unlinkSync(this.chainPath + "/" + (item.split(".")[0]) + ".json")
+          })
+        }
+      })
+    } else {
+      console.log("pass the prune count or, must set the 'chain.prune' attribute when initializing")
+    }
+  }
+  state(name, state) {
+    fs.writeFile(this.chainPath + "/" + name + ".json", JSON.stringify(state, null, 2), (err) => {
+      if (err) console.log("state update error", err)
+    });
+  }
+  // Parse, filter, map
+  // Chunk into arrays if "size" is specified.
+  // Otherwise return a raw object stream
+  transformer (source, name, filename, options) {
+    return (size) => {
+      let readStream;
+      // Since the function is not immediately invoked,
+      // the source stream (chain file) may have already closed
+      // by the time this function is called. 
+      // Therefore check if it's already closed
+      // If already closed, create a normal stream
+      // If stil open (still writing, in case of a large file), create a tailstream
+      if (!source || source.writableFinished) {
+        readStream = fs.createReadStream(filename);
+        this.state(name, { sync: true }) // update header
+      } else {
+        readStream = ts.createReadStream(filename, { waitForCreate: true })
+        source.on("close", () => {
+          this.state(name, { sync: true }) // update header
+          readStream.on("eof", () => { readStream.end() }) // close tail stream
+        })
+      }
+      let stx = readStream.pipe(es.split()).pipe(es.map((item, cb) => {
+        this.parse(item, options).then((data) => {
+          cb(null, data);
+        })
+      }))
+      if (this.filter) stx = stx.pipe(es.filterSync(this.filter))
+      if (this.map) stx = stx.pipe(es.mapSync((e) => {
+        let mapped = this.map(e)
+        let res = Object.assign({"$": mapped}, {tx: e.tx})
+        if (e.blk) res.blk = e.blk
+        return res
+      }))
+      // If 'size' is specified, create a batch stream
+      if (size) {
+        let batch = new BatchStream({ size : size });
+        stx = stx.pipe(batch)
+      }
+      return stx;
+    }
+  }
+  stream(txs, name, filename, header, options) {
+    if (fs.existsSync(filename)) fs.unlinkSync(filename)
+    this.state(name, { sync: false }) // update header
+    let fileStream = fs.createWriteStream(filename);
+    es.readArray(txs)
+      .pipe(es.mapSync((data) => data.toString("hex")))
+      .pipe(es.join("\n"))
+      .pipe(fileStream)
+    if (header) {
+      this.onblock({ header: header, tx: this.transformer(fileStream, name, filename, options) })
+    } else {
+      this.onmempool({ tx: this.transformer(fileStream, name, filename, options) })
+      this.onmempool = null
+    }
   }
   async sendHeader(res) {
     try {
@@ -333,6 +449,29 @@ class Bitwork {
   block(id) {
     return new Promise((resolve, reject) => {
       this.resolve(id).then((hash) => {
+        // if chain exists, and already synced, use the chain file
+        let blockPathPrefix = this.chainPath + "/" + this.current_block.height;
+        if (this.chain && fs.existsSync(blockPathPrefix + ".json") && fs.existsSync(blockPathPrefix + ".tx")) {
+          // read state
+          let state = require(blockPathPrefix + ".json")
+          if (state.sync) {
+            console.log("fetching from bitwork", this.current_block.height)
+            let stream = this.transformer(
+              null, 
+              "" + this.current_block.height,
+              blockPathPrefix + ".tx",
+              {
+                i: this.current_block.height,
+                h: this.current_block.hash,
+                t: this.current_block.time
+              }
+            )
+            resolve({ header: this.current_block, tx: stream })
+            return;
+          }
+        }
+        console.log("fetching from bitcoin")
+        // if no chain, use P2P
         this.request.type = "block"
         this.onblock = resolve
         this.peer.sendMessage(this.peer.messages.GetData.forBlock(hash))
