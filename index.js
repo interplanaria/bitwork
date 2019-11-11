@@ -249,22 +249,24 @@ class Bitwork {
   transformer (source, name, filename, options) {
     return (size) => {
       let readStream;
-      // Since the function is not immediately invoked,
-      // the source stream (chain file) may have already closed
-      // by the time this function is called. 
-      // Therefore check if it's already closed
-      // If already closed, create a normal stream
-      // If stil open (still writing, in case of a large file), create a tailstream
-      if (!source || source.writableFinished) {
-        readStream = fs.createReadStream(filename);
-        this.state(name, { sync: true }) // update header
-      } else {
-        readStream = ts.createReadStream(filename, { waitForCreate: true })
-        source.on("close", () => {
-          this.state(name, { sync: true }) // update header
-          readStream.on("eof", () => { readStream.end() }) // close tail stream
-        })
-      }
+      readStream = fs.createReadStream(filename);
+      this.state(name, { sync: true }) // update header
+//      // Since the function is not immediately invoked,
+//      // the source stream (chain file) may have already closed
+//      // by the time this function is called. 
+//      // Therefore check if it's already closed
+//      // If already closed, create a normal stream
+//      // If stil open (still writing, in case of a large file), create a tailstream
+//      if (!source || source.writableFinished) {
+//        readStream = fs.createReadStream(filename);
+//        this.state(name, { sync: true }) // update header
+//      } else {
+//        readStream = ts.createReadStream(filename, { waitForCreate: true })
+//        source.on("close", () => {
+//          this.state(name, { sync: true }) // update header
+//          readStream.on("eof", () => { readStream.end() }) // close tail stream
+//        })
+//      }
       let stx = readStream.pipe(es.split()).pipe(es.map((item, cb) => {
         this.parse(item, options).then((data) => {
           cb(null, data);
@@ -293,12 +295,14 @@ class Bitwork {
       .pipe(es.mapSync((data) => data.toString("hex")))
       .pipe(es.join("\n"))
       .pipe(fileStream)
-    if (header) {
-      this.onblock({ header: header, tx: this.transformer(fileStream, name, filename, options) })
-    } else {
-      this.onmempool({ tx: this.transformer(fileStream, name, filename, options) })
-      this.onmempool = null
-    }
+    fileStream.on("close", () => {
+      if (header) {
+        this.onblock({ header: header, tx: this.transformer(fileStream, name, filename, options) })
+      } else {
+        this.onmempool({ tx: this.transformer(fileStream, name, filename, options) })
+        this.onmempool = null
+      }
+    })
   }
   async sendHeader(res) {
     try {

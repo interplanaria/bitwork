@@ -1,6 +1,6 @@
 {
   "name": "bitwork",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "Bitcoin networking made simple",
   "main": "index.js",
   "author": "unwriter@protonmail.com",
