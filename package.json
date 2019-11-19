@@ -16,6 +16,6 @@
     "bpu": "0.0.7",
     "event-stream": "^4.0.1",
     "tail-stream": "^0.3.4",
-    "txo": "0.0.16"
+    "txo": "synfonaut/txo"
   }
 }
