@@ -84,7 +84,7 @@ class Bitwork {
     })
     this.peer.on('tx', async (message) => {
       if (this.request.mempool.has(message.transaction.hash)) {
-        if (this.request.type === 'mempool') {
+        if (this.request.type === 'mempool' && this.response.complete) {
           this.response.mempool.push(message.transaction)
           if (this.request.type && this.onmempool && this.response.mempool.length >= this.mempoolCounter) {
             if (this.parse) {
@@ -114,17 +114,27 @@ class Bitwork {
       }
     })
     this.peer.on('inv', (message) => {
-      this.request.mempool = new Set()
-      this.mempoolCounter = message.inventory.length
-      message.inventory.forEach((i) => {
-        let hash = i.hash.toString('hex').match(/.{2}/g).reverse().join("")
-        this.request.mempool.add(hash)
-      })
       if (this.request.type) {
-        this.peer.sendMessage(this.peer.messages.GetData(message.inventory))
+        if (this.request.type === 'mempool') {
+          if (!this.response.complete) {
+            this.getinv(message)
+            this.response.complete = true;
+          }
+        } else if (this.request.type === 'onmempool') {
+          this.getinv(message)
+        }
       }
     })
     this.peer.connect()
+  }
+  getinv(message) {
+    this.request.mempool = new Set()
+    this.mempoolCounter = message.inventory.length
+    message.inventory.forEach((i) => {
+      let hash = i.hash.toString('hex').match(/.{2}/g).reverse().join("")
+      this.request.mempool.add(hash)
+    })
+    this.peer.sendMessage(this.peer.messages.GetData(message.inventory))
   }
   process(items, options) {
     return new Promise((resolve, reject) => {
@@ -423,6 +433,7 @@ class Bitwork {
   mempool() {
     return new Promise((resolve, reject) => {
       this.request.type = "mempool"
+      this.response.complete = null;
       this.onmempool = resolve
       this.response.mempool = []
       this.peer.sendMessage(this.peer.messages.MemPool())
