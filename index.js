@@ -46,7 +46,7 @@ class Bitwork {
         if (this.request.type === 'block') {
           this.request.type = null
           header.height = this.current_block.height
-        } else if (this.request.type === 'onblock') {
+        } else if (this.request.type.includes('onblock')) {
           header.height = await this.height(header.hash)
         }
         if (this.parse) {
@@ -103,7 +103,7 @@ class Bitwork {
               this.request.type = null
             }
           }
-        } else if (this.request.type === 'onmempool') {
+        } else if (this.request.type.includes('onmempool')) {
           if (this.parse) {
             let processed = await this.process([message.transaction])
             if (processed.length > 0) this.onmempool(processed[0])
@@ -120,7 +120,7 @@ class Bitwork {
             this.getinv(message)
             this.response.complete = true;
           }
-        } else if (this.request.type === 'onmempool') {
+        } else if (this.request.type.includes('onmempool')) {
           this.getinv(message)
         }
       }
@@ -372,10 +372,12 @@ class Bitwork {
     if (e === 'ready') {
       this.peer.on("ready", cb)
     } else if (e === 'mempool') {
-      this.request.type = "onmempool"
+      if (!this.request.type) this.request.type = [];
+      this.request.type.push("onmempool")
       this.onmempool = cb
     } else if (e === 'block') {
-      this.request.type = "onblock"
+      if (!this.request.type) this.request.type = [];
+      this.request.type.push("onblock")
       this.onblock = cb
     }
   }
