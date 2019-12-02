@@ -387,17 +387,17 @@ class Bitwork {
         this.parse = lambda
       } else {
         if (lambda === 'hex') {
-          this.parse = async (r) => { return new bsv.Transaction(r).toString('hex') }
+          this.parse = async (r) => { return r.toString() }
         } else if (lambda === 'txo') {
           this.parse = (r, blk) => {
-            return engine.txo.fromTx(r, {h: true}).then(async (t) => {
+            return engine.txo.fromTx(r.toString(), {h: true}).then(async (t) => {
               if (blk)  t.blk = blk
               return t
             })
           }
         } else if (lambda === 'bpu' && arg) {
           this.parse = (r, blk) => {
-            return engine.bpu.parse(arg(r)).then(async (t) => {
+            return engine.bpu.parse(arg(r.toString())).then(async (t) => {
               if (blk) t.blk = blk
               return t
             })
@@ -405,7 +405,7 @@ class Bitwork {
         } else if (lambda === 'bob') {
           this.parse = (r, blk) => {
             return engine.bpu.parse({
-              tx: { r: r }, 
+              tx: { r: r.toString() },
               transform: (o, c) => {
                 if (c.buf && c.buf.byteLength > 512) {
                   o.ls = o.s
