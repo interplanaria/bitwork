@@ -1002,29 +1002,35 @@ bit.on("ready", async () => {
 
 ## 1. How many bitworks to create?
 
-At the moment, you should create a new instance for each purpose.
+There are two modes of bitwork usage:
 
-For example if you want to **fetch** as well as **listen**, you must instantiate two separate bitwork objects.
+1. **Fetch mode:** for actively fetching data from the bitcoin network.
+2. **Listen mode:** for setting up an event handler to listen to events from the bitcoin network.
+
+If your application involves both **fetching** and **listening**, you should create two separate bitwork instances: one for fetching, and the other for listening.
+
+Here's an example:
 
 ```
 const bitwork = require('bitwork')
 const fetcher = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
 fetcher.on("ready", async () => {
-  /******************************************************
-  * Step 1. First fetch the mempool with "fetcher".
-  ******************************************************/
   let mempool = await fetcher.get("mempool")
   console.log("current mempool = ", mempool)
-  /******************************************************
-  * Step 2. Start listening to the mempool with "listener"
-  ******************************************************/
-  const listener = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
-  listener.on("ready", async () => {
-    listener.on("mempool", (e) => {
-      console.log("new mempool transaction", e)
-    })
+})
+const listener = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
+listener.on("ready", async () => {
+  listener.on("mempool", (e) => {
+    console.log("new mempool transaction", e)
+  })
+  listener.on("block", (e) => {
+    console.log("new mempool transaction", e)
   })
 })
 ```
 
-This also applies to listeners. If you want to listen to both mempool transaction events and block events, create two separate listeners for each.
+Things to note:
+
+1. We have created two bitwork instances: `fetcher` and `listener`.
+2. The `listener` can listen to both `mempool` and `block` events simultaneously.
+

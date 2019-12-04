@@ -46,7 +46,7 @@ class Bitwork {
         if (this.request.type === 'block') {
           this.request.type = null
           header.height = this.current_block.height
-        } else if (this.request.type === 'onblock') {
+        } else if (this.request.type.includes('onblock')) {
           header.height = await this.height(header.hash)
         }
         if (this.parse) {
@@ -84,7 +84,7 @@ class Bitwork {
     })
     this.peer.on('tx', async (message) => {
       if (this.request.mempool.has(message.transaction.hash)) {
-        if (this.request.type === 'mempool') {
+        if (this.request.type === 'mempool' && this.response.complete) {
           this.response.mempool.push(message.transaction)
           if (this.request.type && this.onmempool && this.response.mempool.length >= this.mempoolCounter) {
             if (this.parse) {
@@ -103,7 +103,7 @@ class Bitwork {
               this.request.type = null
             }
           }
-        } else if (this.request.type === 'onmempool') {
+        } else if (this.request.type.includes('onmempool')) {
           if (this.parse) {
             let processed = await this.process([message.transaction])
             if (processed.length > 0) this.onmempool(processed[0])
@@ -114,17 +114,27 @@ class Bitwork {
       }
     })
     this.peer.on('inv', (message) => {
-      this.request.mempool = new Set()
-      this.mempoolCounter = message.inventory.length
-      message.inventory.forEach((i) => {
-        let hash = i.hash.toString('hex').match(/.{2}/g).reverse().join("")
-        this.request.mempool.add(hash)
-      })
       if (this.request.type) {
-        this.peer.sendMessage(this.peer.messages.GetData(message.inventory))
+        if (this.request.type === 'mempool') {
+          if (!this.response.complete) {
+            this.getinv(message)
+            this.response.complete = true;
+          }
+        } else if (this.request.type.includes('onmempool')) {
+          this.getinv(message)
+        }
       }
     })
     this.peer.connect()
+  }
+  getinv(message) {
+    this.request.mempool = new Set()
+    this.mempoolCounter = message.inventory.length
+    message.inventory.forEach((i) => {
+      let hash = i.hash.toString('hex').match(/.{2}/g).reverse().join("")
+      this.request.mempool.add(hash)
+    })
+    this.peer.sendMessage(this.peer.messages.GetData(message.inventory))
   }
   process(items, options) {
     return new Promise((resolve, reject) => {
@@ -362,10 +372,12 @@ class Bitwork {
     if (e === 'ready') {
       this.peer.on("ready", cb)
     } else if (e === 'mempool') {
-      this.request.type = "onmempool"
+      if (!this.request.type) this.request.type = [];
+      this.request.type.push("onmempool")
       this.onmempool = cb
     } else if (e === 'block') {
-      this.request.type = "onblock"
+      if (!this.request.type) this.request.type = [];
+      this.request.type.push("onblock")
       this.onblock = cb
     }
   }
@@ -375,17 +387,17 @@ class Bitwork {
         this.parse = lambda
       } else {
         if (lambda === 'hex') {
-          this.parse = async (r) => { return new bsv.Transaction(r).toString('hex') }
+          this.parse = async (r) => { return r.toString() }
         } else if (lambda === 'txo') {
           this.parse = (r, blk) => {
-            return engine.txo.fromTx(r, {h: true}).then(async (t) => {
+            return engine.txo.fromTx(r.toString(), {h: true}).then(async (t) => {
               if (blk)  t.blk = blk
               return t
             })
           }
         } else if (lambda === 'bpu' && arg) {
           this.parse = (r, blk) => {
-            return engine.bpu.parse(arg(r)).then(async (t) => {
+            return engine.bpu.parse(arg(r.toString())).then(async (t) => {
               if (blk) t.blk = blk
               return t
             })
@@ -393,7 +405,7 @@ class Bitwork {
         } else if (lambda === 'bob') {
           this.parse = (r, blk) => {
             return engine.bpu.parse({
-              tx: { r: r }, 
+              tx: { r: r.toString() },
               transform: (o, c) => {
                 if (c.buf && c.buf.byteLength > 512) {
                   o.ls = o.s
@@ -423,6 +435,7 @@ class Bitwork {
   mempool() {
     return new Promise((resolve, reject) => {
       this.request.type = "mempool"
+      this.response.complete = null;
       this.onmempool = resolve
       this.response.mempool = []
       this.peer.sendMessage(this.peer.messages.MemPool())
