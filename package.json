@@ -13,7 +13,7 @@
     "b2p2p": "0.0.1",
     "batch-stream": "^0.1.3",
     "bitcoind-rpc": "^0.8.1",
-    "bpu": "0.0.7",
+    "bpu": "github:synfonaut/bpu",
     "event-stream": "^4.0.1",
     "tail-stream": "^0.3.4",
     "txo": "synfonaut/txo"
