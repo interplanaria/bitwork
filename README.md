@@ -116,7 +116,7 @@ The constructor can take the following attributes:
   - `user`: JSON-RPC username (**required**)
   - `pass`: JSON-RPC password (**required**)
 - `peer`: P2P settings
-  - `host`: Peer IP to connect to (**optional.** default: 127.0.0.1)
+  - `host`: Peer IP to connect to (**optional.** default: same as `rpc.host`)
 - `chain`: Chain definition (optional. strongly recommended)
   - `prune`: automatically prune the oldest `.tx` file inside the `chain` folder when the number of files exceeds `prune`.
   - `path`: the path to store the chain files in
