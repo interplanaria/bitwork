@@ -34,7 +34,7 @@ class Bitwork {
 
     // PEER
     let m = new Messages({ Block: bsv.Block, BlockHeader: bsv.BlockHeader, Transaction: bsv.Transaction, MerkleBlock: bsv.MerkleBlock })
-    let g = Object.assign({ host: "127.0.0.1", messages: m }, (gene && gene.peer ? gene.peer : {}))
+    let g = Object.assign({ host: rpcconfig.host, messages: m }, (gene && gene.peer ? gene.peer : {}))
     this.peer = new Peer(g)
     this.peer.on("disconnect", function() { console.log("disconnected") })
     this.peer.on("error", function(e) { console.log("Err", e) })
