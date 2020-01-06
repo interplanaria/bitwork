@@ -10,7 +10,7 @@ const RpcClient = require('bitcoind-rpc')
 class Bitwork {
   constructor(gene) {
 
-    this.request = {}  // request stub
+    this.request = { type: [], mempool: new Set() }  // request stub
     this.response = {} // response stub
 
     if (!gene || !gene.rpc || !gene.rpc.user || !gene.rpc.pass) {
@@ -33,7 +33,7 @@ class Bitwork {
     this.rpc = new RpcClient(rpcconfig)
 
     // PEER
-    let m = new Messages({ Block: bsv.Block, BlockHeader: bsv.BlockHeader, Transaction: bsv.Transaction, MerkleBlock: bsv.MerkleBlock })
+    let m = new Messages({ Block: bsv.Block, BlockHeader: bsv.BlockHeader, Transaction: bsv.Transaction, MerkleBlock: bsv.MerkleBlock, network: bsv.Networks.defaultNetwork })
     let g = Object.assign({ host: "127.0.0.1", messages: m }, (gene && gene.peer ? gene.peer : {}))
     this.peer = new Peer(g)
     this.peer.on("disconnect", function() { console.log("disconnected") })
@@ -43,8 +43,9 @@ class Bitwork {
     this.peer.on('block', async (e) => {
       let header = e.block.header.toObject()
       if (this.onblock) {
-        if (this.request.type === 'block') {
-          this.request.type = null
+        if (this.request.type.includes('block')) {
+          let index = this.request.type.indexOf("block");
+          if (index > -1) this.request.type.splice(index, 1)
           header.height = this.current_block.height
         } else if (this.request.type.includes('onblock')) {
           header.height = await this.height(header.hash)
@@ -78,30 +79,28 @@ class Bitwork {
       } else {
         this.sendHeader(this.response.header)
       }
-      if (this.request.type === 'header') {
-        this.request.type = null
-      }
+      let index = this.request.type.indexOf("header");
+      if (index > -1) this.request.type.splice(index, 1)
     })
     this.peer.on('tx', async (message) => {
       if (this.request.mempool.has(message.transaction.hash)) {
-        if (this.request.type === 'mempool' && this.response.complete) {
+        if (this.request.type.includes('mempool') && this.response.complete) {
           this.response.mempool.push(message.transaction)
-          if (this.request.type && this.onmempool && this.response.mempool.length >= this.mempoolCounter) {
+          if (this.onmempool && this.response.mempool.length >= this.mempoolCounter) {
             if (this.parse) {
               if (gene.chain) {
                 this.stream(this.response.mempool, "mempool", this.chainPath + "/mempool.tx")
-                this.request.type = null
               } else {
                 let processed = await this.process(this.response.mempool)
                 this.onmempool({ tx: processed })
                 this.onmempool = null
-                this.request.type = null
               }
             } else {
               this.onmempool({ tx: this.response.mempool })
               this.onmempool = null
-              this.request.type = null
             }
+            let index = this.request.type.indexOf("mempool");
+            if (index > -1) this.request.type.splice(index, 1)
           }
         } else if (this.request.type.includes('onmempool')) {
           if (this.parse) {
@@ -114,15 +113,17 @@ class Bitwork {
       }
     })
     this.peer.on('inv', (message) => {
-      if (this.request.type) {
-        if (this.request.type === 'mempool') {
-          if (!this.response.complete) {
-            this.getinv(message)
-            this.response.complete = true;
-          }
-        } else if (this.request.type.includes('onmempool')) {
+      if (message.inventory[0].type === Inventory.TYPE.TX && this.request.type.includes("mempool")) {
+        if (!this.response.complete) {
           this.getinv(message)
+          this.response.complete = true;
         }
+      } 
+      if (message.inventory[0].type === Inventory.TYPE.TX && this.request.type.includes('onmempool')) {
+        this.getinv(message)
+      }
+      if (message.inventory[0].type === Inventory.TYPE.BLOCK && this.request.type.includes('onblock')) {
+        this.peer.sendMessage(this.peer.messages.GetData(message.inventory))
       }
     })
     this.peer.connect()
@@ -372,12 +373,10 @@ class Bitwork {
     if (e === 'ready') {
       this.peer.on("ready", cb)
     } else if (e === 'mempool') {
-      if (!this.request.type) this.request.type = [];
-      this.request.type.push("onmempool")
+      if (!this.request.type.includes("onmempool")) this.request.type.push("onmempool")
       this.onmempool = cb
     } else if (e === 'block') {
-      if (!this.request.type) this.request.type = [];
-      this.request.type.push("onblock")
+      if (!this.request.type.includes("onblock")) this.request.type.push("onblock")
       this.onblock = cb
     }
   }
@@ -434,7 +433,7 @@ class Bitwork {
   }
   mempool() {
     return new Promise((resolve, reject) => {
-      this.request.type = "mempool"
+      if (!this.request.type.includes("mempool")) this.request.type.push("mempool")
       this.response.complete = null;
       this.onmempool = resolve
       this.response.mempool = []
@@ -446,7 +445,9 @@ class Bitwork {
       try {
         if (typeof id === 'number') {
           let hash = await this.hash(id)
+          console.log("hash = ", hash)
           let header = await this.blockHeader(hash)
+          console.log("header = ", header)
           this.current_block = header
           resolve(hash)
         } else if (typeof id === 'object') {
@@ -489,7 +490,7 @@ class Bitwork {
         }
         console.log("fetching from bitcoin")
         // if no chain, use P2P
-        this.request.type = "block"
+        if (!this.request.type.includes("block")) this.request.type.push("block")
         this.onblock = resolve
         this.peer.sendMessage(this.peer.messages.GetData.forBlock(hash))
       })
@@ -501,7 +502,7 @@ class Bitwork {
         if (!continued) {
           this.onheader = resolve
           this.request.header = g
-          this.request.type = 'header'
+          if (!this.request.type.includes("header")) this.request.type.push("header")
           this.response.header = []
         }
         if (typeof g.at !== 'undefined') {
@@ -521,6 +522,8 @@ class Bitwork {
             let from = await this.previous(g.from)
             if (typeof g.to !== 'undefined') {
               let h = await this.resolve(g.to)
+              console.log("from = ", from)
+              console.log("h = ", h)
               this.peer.sendMessage(this.peer.messages.GetHeaders({ starts: [from], stop: h }))
             } else {
               this.peer.sendMessage(this.peer.messages.GetHeaders({ starts: [from] }))

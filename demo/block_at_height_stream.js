@@ -11,19 +11,8 @@ bit.on("ready", async () => {
   var output = fs.createWriteStream('output');
   let counter = 0;
   console.time("Ha")
-  /*
-  blk.tx.batch(1000).map((tx) => {
-    counter++;
-    console.log(counter * 1000)
-    return JSON.stringify(tx)
-  })
-  .pipe(output)
-  .on("close", () => {
-    console.timeEnd("Ha")
-  })
-  */
-
-  blk.tx().pipe(es.mapSync((data) => {
+  let str = blk.tx()
+  str.pipe(es.mapSync((data) => {
     counter++;
     if (counter%1000 === 0) console.log(counter)
     return data;
@@ -31,7 +20,7 @@ bit.on("ready", async () => {
   .pipe(es.stringify())
   .pipe(process.stdout)
   //.pipe(output)
-  .on("close", () => {
+  str.on("end", () => {
     console.timeEnd("Ha")
   })
   //console.log(blk)

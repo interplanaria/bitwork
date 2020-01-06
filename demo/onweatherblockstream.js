@@ -6,11 +6,12 @@ const bit = new bitwork({
 })
 bit.use("parse", "bob")
 bit.use("filter", (e) => {
-  return e.out[0] && e.out[0].tape[1] && e.out[0].tape[1].cell[0] && e.out[0].tape[1].cell[0].s === "19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut"
+  return e.out[0] && e.out[0].tape[1] && e.out[0].tape[1].cell[0] && e.out[0].tape[1].cell[0].s === "1LtyME6b5AnMopQrBPLk4FGN8UBuhxKqrn"
 })
 bit.use("map", (e) => {
   try {
-    return e.out[0].tape[1].cell[1].s
+    let s = e.out[0].tape[1].cell[1].s || e.out[0].tape[1].cell[1].ls
+    return JSON.parse(s)
   } catch (er) {
     console.log(er)
     process.exit()

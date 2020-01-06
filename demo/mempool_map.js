@@ -29,8 +29,8 @@ const B = (b) => {
     }
   })
 }
-//weather(bit)
-B(bit)
+weather(bit)
+//B(bit)
 bit.on("ready", async () => {
   bit.on("mempool", (e) => {
     console.log(e)

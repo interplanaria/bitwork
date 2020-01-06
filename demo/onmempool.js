@@ -3,7 +3,7 @@ const BPU = require("bpu")
 const bit = new bitwork({ rpc: { user: "root", pass: "bitcoin" } })
 bit.use("parse", (r) => {
   return BPU.parse({
-    tx: { r: r },
+    tx: { r: r.toString() },
     transform: (o, c) => {
       if (c.buf && c.buf.byteLength > 512) {
         o.ls = o.s;
@@ -20,5 +20,5 @@ bit.use("parse", (r) => {
   })
 });
 bit.on("mempool", (e) => {
-  console.log(JSON.stringify(e, null, 2))
+  console.log("mempool =", JSON.stringify(e, null, 2))
 })

@@ -8,10 +8,10 @@ const processor = (blk, height) => {
     console.time("block " + height)
     let t = blk.tx()
     t.pipe(es.stringify())//.pipe(process.stdout)
-    t.on("close", () => {
-      console.timeEnd("block " + height)
-      resolve();
-    })
+    //t.on("close", () => {
+    //  console.timeEnd("block " + height)
+    //  resolve();
+    //})
     .on("end", () => {
       console.timeEnd("block " + height)
       resolve();
